@@ -1,88 +1,65 @@
-# 🛡️ Network Packet Sniffer and Traffic Analyzer
+# 🕵️‍♂️ Network Packet Sniffer and Traffic Analyzer 🚦
 
-A real-time network packet sniffer and analyzer with a graphical interface built using **Python**, **Scapy**, and **Tkinter**. It captures network packets, displays connected devices, identifies protocols and accessed servers, and provides live traffic analytics with visualization.
-
----
-
-## 🔧 Features
-
-- 📡 Live Packet Sniffing  
-- 🧑‍💻 Displays IP & MAC addresses, protocols (TCP/UDP/ICMP/ARP), and DNS queries  
-- 📊 Real-time Analytics with Pie Chart  
-- 🌐 Shows connected Wi-Fi SSID and interface  
-- 💾 Export data to CSV  
-- 🔁 Reset captured data instantly  
-- 🖥️ Clean dark-themed GUI  
+A Python-based application for real-time monitoring of network traffic, featuring a Tkinter GUI that captures connected devices, their protocols, and accessed servers. The tool includes live analytics with updating visualizations, CSV export, and a reset option for easy data management.
 
 ---
 
-## 🚀 Getting Started
+## ✨ Features
 
-### 📦 Prerequisites
+- ⚡ **Real-time packet sniffing using Scapy.**
+- 🖥️ **Displays device IP, MAC, protocols (TCP, UDP, ICMP, ARP), and accessed servers.**
+- 📶 **Shows Wi-Fi SSID and network interface on Windows.**
+- ▶️⏸️ **Start and stop packet capture dynamically via GUI buttons.**
+- 📁 **Export captured data to CSV files.**
+- 📊 **Live-updating analytics dashboard with protocol distribution pie chart.**
+- 🔄 **Reset button to clear all captured data and refresh the display.**
 
-Make sure you have Python 3 installed with the following libraries:
+---
 
-```bash
+## ⚙️ Installation
 pip install scapy matplotlib
-▶️ Run the Application
-bash
-Copy
-Edit
-python main.py
-Replace main.py with your filename if it's different.
 
-📝 How It Works
-Start Sniffing – Captures live packets from the default network interface.
 
-Device Table – Displays:
-
-IP Address
-
-MAC Address
-
-Protocols in use
-
-Accessed servers (via DNS)
-
-Wi-Fi SSID
-
-Analytics – Real-time pie chart showing protocol distribution.
-
-Export – Save data as a .csv file.
-
-Reset – Clears all current data and resets the display.
-
-📁 Project Structure
-cpp
-Copy
-Edit
-📦 NetworkPacketSniffer/
-├── main.py
-├── README.md
-└── requirements.txt (optional)
-📸 GUI Preview
-(Add screenshots or GIF previews here if available)
-
-🛑 Disclaimer
-This tool is for educational and authorized testing purposes only. Unauthorized sniffing of networks is illegal and unethical. Use it only on networks you own or have permission to monitor.
-
-📃 License
-This project is licensed under the MIT License.
-
-🙌 Acknowledgements
-Scapy Documentation
-
-Matplotlib
-
-Tkinter Docs
-
-🤝 Contributing
-Feel free to fork, submit issues, or contribute improvements via pull requests.
-
-yaml
-Copy
-Edit
+**Note:**  
+Run the script with administrator/root privileges for packet sniffing.
 
 ---
 
-Let me know if you'd also like me to generate the `requirements.txt` or `LICENSE`
+## 🚀 Usage
+
+1. **Clone the repo:**
+
+    git clone : https://github.com/Suru030/network-packet-sniffer.git
+    
+    cd network-packet-sniffer
+
+2. **Run the tool:**
+
+    sudo python3 sniffer.py # Linux/macOS
+    
+    or
+    
+    python sniffer.py # Windows (may require admin rights)
+
+
+3. **Use the GUI** to start/stop sniffing, reset data, export CSV, or view analytics.
+
+---
+
+## ⚠️ Known Limitations
+
+- 🪟 Wi-Fi SSID detection is currently Windows-only.
+- 🛡️ Requires elevated privileges to sniff packets.
+- 🌐 No interface selection; defaults to system default interface.
+- 🐢 UI updates might slow on very high traffic.
+
+---
+
+## 🌟 Future Enhancements
+
+- 💻 Cross-platform Wi-Fi detection.
+- 🖱️ Interface selector in GUI.
+- 🕵️ Intrusion and spoof detection.
+- 🗺️ Additional visual analytics like geolocation and bandwidth.
+
+---
