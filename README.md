@@ -1,46 +1,88 @@
-# Network Packet Sniffer and Traffic Analyzer
+# 🛡️ Network Packet Sniffer and Traffic Analyzer
 
-A real-time network monitoring tool built with Python, Tkinter, and Scapy that captures live network traffic, analyzes connected devices, displays protocols and accessed servers per device, and provides data visualization and export features.
-
----
-
-## Features
-
-- **Real-time Packet Sniffing:**  
-  Captures Ethernet, IP, ARP, and DNS packets to identify network devices and their communication patterns.
-
-- **Device Summary Table:**  
-  Lists detected devices with IP and MAC addresses, protocols used (TCP, UDP, ICMP, ARP), and accessed servers/domains.
-
-- **Wi-Fi Info Display:**  
-  Shows current Wi-Fi SSID and network interface (Windows only).
-
-- **Start/Stop Sniffing Controls:**  
-  Run and pause packet capture dynamically via GUI buttons.
-
-- **Export to CSV:**  
-  Save captured session data (devices, protocols, servers, SSID) to a CSV file.
-
-- **Analytics Dashboard:**  
-  Interactive window with live-updating protocol distribution pie chart.
-
-- **Reset Button:**  
-  Clears all captured data and resets the device list and info labels.
+A real-time network packet sniffer and analyzer with a graphical interface built using **Python**, **Scapy**, and **Tkinter**. It captures network packets, displays connected devices, identifies protocols and accessed servers, and provides live traffic analytics with visualization.
 
 ---
 
-## Screenshots
+## 🔧 Features
 
-*Add screenshots here to showcase your GUI, analytics window, and main features.*
+- 📡 Live Packet Sniffing  
+- 🧑‍💻 Displays IP & MAC addresses, protocols (TCP/UDP/ICMP/ARP), and DNS queries  
+- 📊 Real-time Analytics with Pie Chart  
+- 🌐 Shows connected Wi-Fi SSID and interface  
+- 💾 Export data to CSV  
+- 🔁 Reset captured data instantly  
+- 🖥️ Clean dark-themed GUI  
 
 ---
 
-## Requirements
+## 🚀 Getting Started
 
-- Python 3.x  
-- [Scapy](https://scapy.net/)  
-- [Tkinter](https://docs.python.org/3/library/tk.html) (usually included with Python)  
-- [Matplotlib](https://matplotlib.org/)  
+### 📦 Prerequisites
 
-### Installation
+Make sure you have Python 3 installed with the following libraries:
 
+```bash
+pip install scapy matplotlib
+▶️ Run the Application
+bash
+Copy
+Edit
+python main.py
+Replace main.py with your filename if it's different.
+
+📝 How It Works
+Start Sniffing – Captures live packets from the default network interface.
+
+Device Table – Displays:
+
+IP Address
+
+MAC Address
+
+Protocols in use
+
+Accessed servers (via DNS)
+
+Wi-Fi SSID
+
+Analytics – Real-time pie chart showing protocol distribution.
+
+Export – Save data as a .csv file.
+
+Reset – Clears all current data and resets the display.
+
+📁 Project Structure
+cpp
+Copy
+Edit
+📦 NetworkPacketSniffer/
+├── main.py
+├── README.md
+└── requirements.txt (optional)
+📸 GUI Preview
+(Add screenshots or GIF previews here if available)
+
+🛑 Disclaimer
+This tool is for educational and authorized testing purposes only. Unauthorized sniffing of networks is illegal and unethical. Use it only on networks you own or have permission to monitor.
+
+📃 License
+This project is licensed under the MIT License.
+
+🙌 Acknowledgements
+Scapy Documentation
+
+Matplotlib
+
+Tkinter Docs
+
+🤝 Contributing
+Feel free to fork, submit issues, or contribute improvements via pull requests.
+
+yaml
+Copy
+Edit
+
+---
+
+Let me know if you'd also like me to generate the `requirements.txt` or `LICENSE`
