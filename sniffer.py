@@ -12,6 +12,10 @@ import os
 import numpy as np
 import requests
 import ipaddress
+import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
 
 try:
     from PIL import Image, ImageDraw, ImageFilter, ImageTk
@@ -26,13 +30,7 @@ except Exception:
     IsolationForest = None
     joblib = None
 
-import matplotlib
-matplotlib.use("TkAgg")
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import matplotlib.pyplot as plt
-
-# -------------------- Backend state & logic --------------------
-devices = {}  # MAC -> IP
+devices = {}
 protocols_by_device = defaultdict(lambda: defaultdict(int))
 destinations_by_device = defaultdict(set)
 packet_counters = defaultdict(int)
@@ -70,7 +68,6 @@ FEATURE_LABELS = [
     "tcp", "udp", "icmp", "arp", "dns"
 ]
 
-# MAC vendor cache & sample OUI map (offline)
 mac_vendor_cache = {}
 OUI_VENDOR_MAP = {
     "00:1A:2B": "Cisco Systems",
@@ -85,13 +82,35 @@ OUI_VENDOR_MAP = {
     "00:15:5D": "Microsoft Corp."
 }
 
-# Vendor info per MAC (only filled on-demand)
-vendor_info = {}  # MAC -> vendor string
+vendor_info = {}
+main_device_table = None
 
-# For refreshing vendor in main table from device details
-main_device_table = None  # assigned in launch_gui
+DARK_THEME = {
+    "bg": "#0A0A0A",
+    "panel_bg": "#151515",
+    "card_bg": "#151515",
+    "fg": "#EADBC8",
+    "muted": "#9A8C76",
+    "accent": "#C8A94D",
+    "accent2": "#B38C2A",
+    "text_bg": "#111111",
+    "panel_fg": "#0A0A0A"
+}
 
-# -------------------- Utility & packet processing --------------------
+LIGHT_THEME = {
+    "bg": "#E5E1DA",
+    "panel_bg": "#D5CFC3",
+    "card_bg": "#F3EEE5",
+    "fg": "#3A3125",
+    "muted": "#7B6C57",
+    "accent": "#C8A94D",
+    "accent2": "#B38C2A",
+    "text_bg": "#F7F2E9",
+    "panel_fg": "#0A0A0A"
+}
+
+APP_THEME = DARK_THEME.copy()
+
 def get_connected_ssid():
     if platform.system() == "Windows":
         try:
@@ -120,7 +139,6 @@ def get_connected_ssid():
     return "Not available", "Not available"
 
 def normalize_mac(mac: str) -> str:
-    """Normalize MAC to upper, colon-separated."""
     mac = mac.strip().upper().replace("-", ":")
     parts = mac.split(":")
     if len(parts) < 6:
@@ -128,20 +146,16 @@ def normalize_mac(mac: str) -> str:
     return ":".join(parts[:6])
 
 def lookup_mac_vendor(mac: str) -> str:
-    """Offline-first vendor lookup, with optional online fallback.
-       Called ONLY when user clicks a vendor lookup button."""
     if not mac:
         return "Unknown"
     norm = normalize_mac(mac)
     if norm in mac_vendor_cache:
         return mac_vendor_cache[norm]
     prefix = ":".join(norm.split(":")[:3])
-    # 1) Offline OUI table
     if prefix in OUI_VENDOR_MAP:
         vendor = OUI_VENDOR_MAP[prefix]
         mac_vendor_cache[norm] = vendor
         return vendor
-    # 2) Optional online fallback (best-effort, may fail quietly)
     try:
         url = f"https://api.macvendors.co/{prefix}"
         resp = requests.get(url, timeout=3)
@@ -226,7 +240,6 @@ def process_queued_packets(tree, info_labels, alerts_text):
         if dns:
             protocols_by_device[mac]['DNS'] += 1
 
-        # Feature window update
         with window_lock:
             w = current_window[mac]
             w['pkts'] += 1
@@ -385,7 +398,6 @@ def score_and_flag_devices(tree, alerts_text):
 def highlight_device_in_tree(tree, mac):
     for item in tree.get_children():
         vals = tree.item(item, 'values')
-        # MAC is at index 1 (IP, MAC, Vendor, Protocols, ...)
         if len(vals) >= 2 and vals[1] == mac:
             tree.item(item, tags=('anomaly',))
             tree.tag_configure('anomaly', background='#5a0000')
@@ -401,33 +413,6 @@ def log_alert(msg, alerts_text):
         alerts_text.config(state='disabled')
     except Exception:
         pass
-
-# -------------------- Theme definitions (Luxury Satin Black + Gold) --------------------
-DARK_THEME = {
-    "bg": "#0A0A0A",        # main background
-    "panel_bg": "#151515",  # sidebars / panels
-    "card_bg": "#151515",   # cards
-    "fg": "#EADBC8",        # main text (warm off-white)
-    "muted": "#9A8C76",     # secondary text
-    "accent": "#C8A94D",    # gold
-    "accent2": "#B38C2A",   # deeper gold
-    "text_bg": "#111111",   # text widgets
-    "panel_fg": "#0A0A0A"   # text over accent backgrounds
-}
-
-LIGHT_THEME = {
-    "bg": "#E5E1DA",        # warm light beige
-    "panel_bg": "#D5CFC3",
-    "card_bg": "#F3EEE5",
-    "fg": "#3A3125",
-    "muted": "#7B6C57",
-    "accent": "#C8A94D",    # still gold, to keep identity
-    "accent2": "#B38C2A",
-    "text_bg": "#F7F2E9",
-    "panel_fg": "#0A0A0A"
-}
-
-APP_THEME = DARK_THEME.copy()
 
 def apply_theme_to_style(root):
     style = ttk.Style(root)
@@ -478,7 +463,34 @@ def make_gradient_image(width, height):
     img = img.filter(ImageFilter.GaussianBlur(radius=10))
     return ImageTk.PhotoImage(img)
 
-# -------------------- Device detail window (on-demand vendor + geo) --------------------
+def recolor_widget_tree(widget, old_theme, new_theme):
+    try:
+        bg = widget.cget("bg")
+        if bg == old_theme["bg"]:
+            widget.config(bg=new_theme["bg"])
+        elif bg == old_theme["panel_bg"]:
+            widget.config(bg=new_theme["panel_bg"])
+        elif bg == old_theme["card_bg"]:
+            widget.config(bg=new_theme["card_bg"])
+        elif bg == old_theme["text_bg"]:
+            widget.config(bg=new_theme["text_bg"])
+    except Exception:
+        pass
+    try:
+        fg = widget.cget("fg")
+        if fg == old_theme["fg"]:
+            widget.config(fg=new_theme["fg"])
+        elif fg == old_theme["muted"]:
+            widget.config(fg=new_theme["muted"])
+        elif fg == old_theme["panel_fg"]:
+            widget.config(fg=new_theme["panel_fg"])
+        elif fg == old_theme["accent"]:
+            widget.config(fg=new_theme["accent"])
+    except Exception:
+        pass
+    for child in widget.winfo_children():
+        recolor_widget_tree(child, old_theme, new_theme)
+
 def open_device_detail_window(mac):
     detail_win = tk.Toplevel()
     detail_win.title(f"Device Details - {mac}")
@@ -519,7 +531,6 @@ def open_device_detail_window(mac):
         font=("Segoe UI", 12, "bold")
     ).pack(side='left', padx=10)
 
-    # Vendor + Geo labels (initially not looked up)
     vendor_text = tk.StringVar(
         value="Vendor: (click a lookup button)"
     )
@@ -545,13 +556,10 @@ def open_device_detail_window(mac):
     )
     geo_label.pack(side="left", padx=10)
 
-    # --- Vendor-only lookup button ---
     def lookup_vendor_only():
         vendor = lookup_mac_vendor(mac)
         vendor_info[mac] = vendor
         vendor_text.set(f"Vendor: {vendor}")
-
-        # Refresh main table
         global main_device_table
         try:
             if main_device_table is not None:
@@ -572,14 +580,10 @@ def open_device_detail_window(mac):
     )
     vendor_btn.pack(side="right", padx=10)
 
-    # Combined lookup button – performs BOTH vendor + geo on demand
     def lookup_info():
-        # 1) Vendor lookup (sync, fast)
         vendor = lookup_mac_vendor(mac)
         vendor_info[mac] = vendor
         vendor_text.set(f"Vendor: {vendor}")
-
-        # Optionally refresh main table vendor column
         global main_device_table
         try:
             if main_device_table is not None:
@@ -587,7 +591,6 @@ def open_device_detail_window(mac):
         except Exception:
             pass
 
-        # 2) Geo lookup (async)
         def geo_worker():
             if not ip or ip == "N/A":
                 result = "Geo: unavailable"
@@ -635,7 +638,6 @@ def open_device_detail_window(mac):
         pady=4
     ).pack(side="right", padx=10)
 
-    # Anomaly reasons
     reasons_frame = tk.LabelFrame(
         detail_win,
         text="Anomaly Reasons (recent)",
@@ -661,7 +663,6 @@ def open_device_detail_window(mac):
             reasons_text.insert('end', f"[{ts}] Anomaly\n")
     reasons_text.config(state='disabled')
 
-    # Destination counts
     dest_frame = tk.LabelFrame(
         detail_win,
         text="Accessed Servers / Destinations",
@@ -688,7 +689,6 @@ def open_device_detail_window(mac):
     for d, c in sorted(dest_counts.items(), key=lambda x: -x[1]):
         dest_tree.insert('', 'end', values=[d, c])
 
-    # Recent packets
     pkt_frame = tk.LabelFrame(
         detail_win,
         text="Recent Packets (latest first)",
@@ -754,7 +754,6 @@ def open_device_detail_window(mac):
         relief="flat"
     ).pack(pady=6)
 
-# -------------------- Table & control functions --------------------
 def update_table(tree):
     ssid, _ = get_connected_ssid()
     tree.delete(*tree.get_children())
@@ -857,7 +856,6 @@ def reset_data(tree, info_labels, alerts_text):
     update_info_labels(info_labels)
 
 def launch_analytics_legacy():
-    """Optional separate analytics window, if wanted."""
     analytics_window = tk.Toplevel()
     analytics_window.title("Data Visualization")
     analytics_window.geometry("700x500")
@@ -928,9 +926,7 @@ def disable_ids():
     ids_enabled = False
     messagebox.showinfo("IDS", "IDS disabled.")
 
-# -------------------- Tooltip helper --------------------
 class Tooltip:
-    """Simple tooltip for widgets; uses a small Toplevel window."""
     def __init__(self, widget, text_getter, sidebar_state_getter):
         self.widget = widget
         self.text_getter = text_getter
@@ -992,7 +988,6 @@ class Tooltip:
         except Exception:
             self.tipwindow = None
 
-# -------------------- About frame --------------------
 def make_about_frame(parent):
     frame = tk.Frame(parent, bg=APP_THEME["bg"])
     tk.Label(
@@ -1003,7 +998,7 @@ def make_about_frame(parent):
         fg=APP_THEME["fg"]
     ).pack(anchor="w", padx=8, pady=8)
     text = (
-        "NetScope — Network Sniffer & IDS\n"
+        " NETWORK PACKET SNIFFER AND TRAFFIC ANALIZER FOR REAL-TIME DATA MONITORING\n"
         "Theme: Satin Black & Gold\n\n"
         "Features:\n"
         "- Real-time packet sniffing\n"
@@ -1012,7 +1007,7 @@ def make_about_frame(parent):
         "- Traffic analytics & anomaly detection\n"
         "- Collapsible sidebar & tooltips\n"
         "- Dark & Light classy themes\n\n"
-        "Created by: You 😎"
+        "Created by: G3"
     )
     tk.Label(
         frame,
@@ -1024,12 +1019,11 @@ def make_about_frame(parent):
     ).pack(anchor="w", padx=12, pady=4)
     return frame
 
-# -------------------- Main GUI --------------------
 def launch_gui():
     global main_device_table
 
     root = tk.Tk()
-    root.title("NetScope — Network Packet Sniffer")
+    root.title("Sniffer — Network Packet Sniffer")
     root.geometry("1350x780")
     root.minsize(1000, 700)
 
@@ -1039,6 +1033,7 @@ def launch_gui():
     w = max(800, root.winfo_width())
     h = max(600, root.winfo_height())
     bg_img = make_gradient_image(w, h) if PIL_AVAILABLE else None
+    bg_label = None
     if bg_img:
         bg_label = tk.Label(root, image=bg_img)
         bg_label.image = bg_img
@@ -1061,13 +1056,12 @@ def launch_gui():
     sidebar.pack(side="left", fill="y", padx=(20, 10), pady=20)
     sidebar.pack_propagate(False)
 
-    # Top bar (logo + collapse)
     top_bar = tk.Frame(sidebar, bg=APP_THEME["panel_bg"])
     top_bar.pack(fill="x", pady=(8, 6))
 
     logo_full = tk.Label(
         top_bar,
-        text="NetScope",
+        text="SNIFFER",
         font=("Segoe UI", 18, "bold"),
         bg=APP_THEME["panel_bg"],
         fg=APP_THEME["accent"]
@@ -1126,7 +1120,6 @@ def launch_gui():
     )
     collapse_btn.pack(side="right", padx=(0, 6))
 
-    # Sidebar badges
     badge_frame = tk.Frame(sidebar, bg=APP_THEME["panel_bg"])
     badge_frame.pack(pady=(8, 14))
 
@@ -1156,7 +1149,6 @@ def launch_gui():
     )
     alert_badge.pack(side="left")
 
-    # Navigation items
     nav_items = [
         ("Dashboard", "dashboard", "🏠"),
         ("Alerts Center", "alerts", "🔔"),
@@ -1208,16 +1200,6 @@ def launch_gui():
 
         nav_button_map[key] = (b, {"label": title, "icon": icon}, tt)
 
-    # Theme switches
-    def set_theme_and_reload(theme_dict, parent_root):
-        global APP_THEME
-        APP_THEME = theme_dict.copy()
-        try:
-            parent_root.destroy()
-        except Exception:
-            pass
-        launch_gui()
-
     theme_frame = tk.Frame(sidebar, bg=APP_THEME["panel_bg"])
     theme_frame.pack(side="bottom", pady=18)
 
@@ -1227,27 +1209,94 @@ def launch_gui():
         bg=APP_THEME["panel_bg"],
         fg=APP_THEME["muted"],
         font=("Segoe UI", 9)
-    ).pack()
+    ).pack(pady=(0, 4))
 
-    tk.Button(
-        theme_frame,
-        text="Dark (Satin Gold)",
-        bg=DARK_THEME["panel_bg"],
-        fg=DARK_THEME["accent"],
-        relief="flat",
-        command=lambda: set_theme_and_reload(DARK_THEME, root)
-    ).pack(pady=4, padx=6, fill="x")
+    switch_outer = tk.Frame(theme_frame, bg=APP_THEME["panel_bg"])
+    switch_outer.pack()
 
-    tk.Button(
-        theme_frame,
-        text="Light (Warm Gray)",
-        bg=LIGHT_THEME["panel_bg"],
-        fg=LIGHT_THEME["accent"],
-        relief="flat",
-        command=lambda: set_theme_and_reload(LIGHT_THEME, root)
-    ).pack(pady=4, padx=6, fill="x")
+    switch_bg = tk.Frame(
+        switch_outer,
+        bg=APP_THEME["card_bg"],
+        bd=2,
+        relief="ridge",
+        width=120,
+        height=34,
+        highlightthickness=2,
+        highlightbackground=APP_THEME["accent2"]
+    )
+    switch_bg.pack()
+    switch_bg.pack_propagate(False)
 
-    # ---------------- Main content ----------------
+    knob = tk.Frame(
+        switch_bg,
+        bg=APP_THEME["accent"],
+        width=58,
+        height=26
+    )
+    knob.place(y=4)
+
+    knob_label = tk.Label(
+        knob,
+        text="DARK",
+        bg=APP_THEME["accent"],
+        fg=APP_THEME["panel_fg"],
+        font=("Segoe UI", 9, "bold")
+    )
+    knob_label.place(relx=0.5, rely=0.5, anchor="center")
+
+    def place_knob_for_theme():
+        if APP_THEME["bg"].lower() == DARK_THEME["bg"].lower():
+            knob.place(x=4, y=4)
+            knob_label.config(text="DARK")
+        else:
+            knob.place(x=120 - 4 - 58, y=4)
+            knob_label.config(text="LIGHT")
+
+    place_knob_for_theme()
+
+    def animate_knob(target_x):
+        start_x = knob.winfo_x()
+        steps = 10
+        dx = (target_x - start_x) / float(steps)
+
+        def step(i=0, x=start_x):
+            knob.place(x=int(x), y=4)
+            if i < steps:
+                switch_bg.after(12, step, i + 1, x + dx)
+            else:
+                knob.place(x=target_x, y=4)
+
+        step()
+
+    def toggle_theme_event(event=None):
+        global APP_THEME
+        old_theme = APP_THEME.copy()
+        to_dark = not (APP_THEME["bg"].lower() == DARK_THEME["bg"].lower())
+        APP_THEME = DARK_THEME.copy() if to_dark else LIGHT_THEME.copy()
+        apply_theme_to_style(root)
+        recolor_widget_tree(root, old_theme, APP_THEME)
+        if bg_label and PIL_AVAILABLE:
+            new_img = make_gradient_image(root.winfo_width(), root.winfo_height())
+            bg_label.image = new_img
+            bg_label.config(image=new_img)
+        if APP_THEME["bg"].lower() == DARK_THEME["bg"].lower():
+            target_x = 4
+            knob_label.config(text="DARK")
+        else:
+            target_x = 120 - 4 - 58
+            knob_label.config(text="LIGHT")
+        animate_knob(target_x)
+        switch_bg.config(
+            bg=APP_THEME["card_bg"],
+            highlightbackground=APP_THEME["accent2"]
+        )
+        knob.config(bg=APP_THEME["accent"])
+        knob_label.config(bg=APP_THEME["accent"], fg=APP_THEME["panel_fg"])
+
+    switch_bg.bind("<Button-1>", toggle_theme_event)
+    knob.bind("<Button-1>", toggle_theme_event)
+    knob_label.bind("<Button-1>", toggle_theme_event)
+
     content = tk.Frame(container, bg=APP_THEME["bg"])
     content.pack(
         side="left",
@@ -1274,7 +1323,6 @@ def launch_gui():
 
     frames = {}
 
-    # Dashboard
     dash_frame = tk.Frame(content, bg=APP_THEME["bg"])
     frames["dashboard"] = dash_frame
 
@@ -1364,7 +1412,6 @@ def launch_gui():
     )
     ids_status_label.pack(anchor="nw", padx=10)
 
-    # Device table
     table_outer = tk.Frame(
         dash_frame,
         bg=APP_THEME["bg"],
@@ -1403,7 +1450,7 @@ def launch_gui():
     dev_scroll.pack(side="right", fill="y")
     device_table.configure(yscroll=dev_scroll.set)
 
-    main_device_table = device_table  # for vendor refresh after lookup
+    main_device_table = device_table
 
     def on_device_double(e):
         item = device_table.identify_row(e.y)
@@ -1417,7 +1464,6 @@ def launch_gui():
 
     dash_frame.pack(fill="both", expand=True)
 
-    # Alerts frame
     alerts_frame = tk.Frame(content, bg=APP_THEME["bg"])
     frames["alerts"] = alerts_frame
 
@@ -1446,7 +1492,6 @@ def launch_gui():
     )
     alerts_text.pack(fill="both", expand=True, padx=4, pady=4)
 
-    # Analytics frame
     analytics_frame = tk.Frame(content, bg=APP_THEME["bg"])
     frames["analytics"] = analytics_frame
 
@@ -1498,7 +1543,6 @@ def launch_gui():
 
     refresh_chart()
 
-    # Export frame
     export_frame = tk.Frame(content, bg=APP_THEME["bg"])
     frames["export"] = export_frame
 
@@ -1520,25 +1564,9 @@ def launch_gui():
         font=("Segoe UI", 10, "bold")
     ).pack(padx=8, pady=6, anchor="w")
 
-    tk.Button(
-        export_frame,
-        text="Reset Data",
-        bg="#ff9800",
-        fg="white",
-        command=lambda: reset_data(
-            device_table,
-            {"ssid": ssid_lbl, "iface": iface_lbl, "devices": devices_label},
-            alerts_text
-        ),
-        relief="flat",
-        font=("Segoe UI", 10, "bold")
-    ).pack(padx=8, pady=6, anchor="w")
-
-    # About frame
     about_frame = make_about_frame(content)
     frames["about"] = about_frame
 
-    # Info bar
     info_bar = tk.Frame(content, bg=APP_THEME["bg"])
     info_bar.pack(fill="x", padx=8, pady=(4, 0))
 
@@ -1565,7 +1593,26 @@ def launch_gui():
         "devices": devices_label
     }
 
-    # --- Buttons (Start/Stop + IDS toggle + Export) ---
+    def reset_if_stopped():
+        if sniffing:
+            messagebox.showwarning("Stop Sniffer", "Please stop the sniffer before resetting.")
+            return
+        reset_data(
+            device_table,
+            {"ssid": ssid_lbl, "iface": iface_lbl, "devices": devices_label},
+            alerts_text
+        )
+
+    tk.Button(
+        export_frame,
+        text="Reset Data",
+        bg="#ff9800",
+        fg="white",
+        command=reset_if_stopped,
+        relief="flat",
+        font=("Segoe UI", 10, "bold")
+    ).pack(padx=8, pady=6, anchor="w")
+
     def toggle_sniffing():
         global sniffing
         if not sniffing:
@@ -1595,6 +1642,19 @@ def launch_gui():
         pady=4
     )
     start_btn.pack(side="right", padx=6)
+
+    reset_btn_header = tk.Button(
+        top_actions,
+        text="Reset",
+        bg="#ff9800",
+        fg="white",
+        command=reset_if_stopped,
+        relief="flat",
+        font=("Segoe UI", 10, "bold"),
+        padx=10,
+        pady=4
+    )
+    reset_btn_header.pack(side="right", padx=6)
 
     export_btn_header = tk.Button(
         top_actions,
@@ -1656,7 +1716,6 @@ def launch_gui():
         pady=4
     ).pack(side="right", padx=6)
 
-    # Frame switching
     def show_frame(key):
         header_title.config(
             text=key.capitalize() if key != "export" else "Export"
@@ -1715,7 +1774,6 @@ def launch_gui():
     root.protocol("WM_DELETE_WINDOW", on_close)
     root.mainloop()
 
-# -------------------- ENTRY POINT --------------------
 if __name__ == "__main__":
-    APP_THEME = DARK_THEME.copy()  # start in luxury dark mode
+    APP_THEME = DARK_THEME.copy()
     launch_gui()
